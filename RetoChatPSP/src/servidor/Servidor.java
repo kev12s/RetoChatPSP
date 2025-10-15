@@ -42,39 +42,29 @@ public class Servidor {
         this.fechaInicio = new Date();
         this.ultimoMensaje = "Ninguno";
         this.contadorClientes = new Contador();
-        
-         try {
-            serverSocket = new ServerSocket(puerto);
-            System.out.println("Servidor iniciado en puerto " + puerto);
-            log("Servidor iniciado");
-        } catch (IOException e) {
-            System.err.println("Error al iniciar servidor: " + e.getMessage());
-        }
     }
 
     public void iniciar() {
         try {
-            System.out.println("Servidor iniciado. Esperando clientes...");
-
+            serverSocket = new ServerSocket(puerto);
+            System.out.println("Servidor iniciado en puerto " + puerto);
+            log("Servidor iniciado");
+            
             while (true) {
-                Socket cliente = serverSocket.accept();
-                int idConexiones = contadorClientes.incrementar();
-
-                if (idConexiones <= max_clientes) {
-                    ManejadorCliente manejador = new ManejadorCliente(
-                            cliente, idConexiones, contadorClientes
-                    );
-                    new Thread(manejador).start();
+                Socket socket = serverSocket.accept();
+                
+                if (contadorClientes.getContador() < max_clientes) {
+                    ManejadorCliente handler = new ManejadorCliente(socket, this);
+                    new Thread(handler).start();
                 } else {
-                    cliente.close();
-                    break;
+                    ObjectOutputStream salida = new ObjectOutputStream(socket.getOutputStream());
+                    salida.writeObject("ERROR: Servidor lleno");
+                    socket.close();
                 }
             }
-
-            System.out.println("Se ha alcanzado el máximo de " + max_clientes + " clientes.");
-
-        } catch (Exception e) {
-            System.out.println("Error en el servidor: " + e.getMessage());
+            
+        } catch (IOException e) {
+            System.err.println("Error en servidor: " + e.getMessage());
         }
     }
     
@@ -85,6 +75,50 @@ public class Servidor {
         
         //SERIA ESCRIBIR EN UN FICHERO EN VEZ DE MOSTRAR POR CONSOLA
         System.out.println(logGuardado);
+    }
+     
+      // MÉTODOS PRINCIPALES QUE HAY QUE IMPLEMENTAR
+    public synchronized void registrarClienteConectado(String usuario, ManejadorCliente handler) {
+        clientesConectados.put(usuario, handler);
+        contadorClientes.incrementar();
+        log("Usuario conectado: " + usuario);
+        informarATodos("SERVIDOR: " + usuario + " se ha unido al chat", null);
+    }
+    
+    public synchronized void clienteDesconectado(String usuario) {
+        if (clientesConectados.remove(usuario) != null) {
+        contadorClientes.decrementar();
+        log("Usuario desconectado: " + usuario);
+        informarATodos("SERVIDOR: " + usuario + " ha abandonado el chat", null);
+    }
+    }
+    
+    public synchronized void enviarMensajePublico(String usuario, String mensaje) {
+        String mensajeCompleto = "PUBLICO [" + usuario + "]: " + mensaje;
+        log("Mensaje público de " + usuario + ": " + mensaje);
+        informarATodos(mensajeCompleto, usuario);
+    }
+    
+    public synchronized void enviarMensajePrivado(String usuarioActual, String destinatario, String mensaje) {
+        ManejadorCliente manejadorDestino = clientesConectados.get(destinatario);
+        ManejadorCliente manejadorRemitente = clientesConectados.get(usuarioActual);
+    
+    if (manejadorDestino != null && manejadorRemitente != null) {
+        String mensajePrivado = "PRIVADO de " + usuarioActual + ": " + mensaje;
+        String mensajeConfirmacion = "PRIVADO para " + destinatario + ": " + mensaje;
+        
+        manejadorDestino.enviarMensaje(mensajePrivado);
+        manejadorRemitente.enviarMensaje(mensajeConfirmacion);
+        log("Mensaje privado " + usuarioActual + " a " + destinatario + ": " + mensaje);
+    }
+    }
+    
+    private synchronized void informarATodos(String mensaje, String usuarioActual) {
+        for (Map.Entry<String, ManejadorCliente> entry : clientesConectados.entrySet()) {
+        if (!entry.getKey().equals(usuarioActual)) {
+            entry.getValue().enviarMensaje(mensaje);
+        }
+    }
     }
      
      

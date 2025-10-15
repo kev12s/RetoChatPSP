@@ -1,51 +1,57 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package servidor;
 
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.Socket;
+import java.io.*;
+import java.net.*;
 
 public class ManejadorCliente implements Runnable {
-    private  Socket socket;
-    private  int clientId;
-    private  Contador conexionesActivas;
 
-    public ManejadorCliente(Socket socket, int clientId, Contador conexionesActivas) {
+    private Socket socket;
+    private Servidor servidor;
+    private ObjectOutputStream salida;
+    private String usuario;
+
+    public ManejadorCliente(Socket socket, Servidor servidor) {
         this.socket = socket;
-        this.clientId = clientId;
-        this.conexionesActivas = conexionesActivas;
+        this.servidor = servidor;
     }
 
     @Override
     public void run() {
-        String saludoCliente;
-        Object obj;
+        try {
+            salida = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream entrada = new ObjectInputStream(socket.getInputStream());
 
-        try (Socket s = this.socket;
-             ObjectOutputStream salida = new ObjectOutputStream(s.getOutputStream());
-             ObjectInputStream entrada = new ObjectInputStream(s.getInputStream())) {
+            usuario = (String) entrada.readObject();
 
-            // Enviar confirmación al cliente
-            salida.writeObject("Conexión exitosa al servidor. Eres el cliente #" + clientId);
+            servidor.registrarClienteConectado(usuario, this);
+            salida.writeObject("CONEXION_EXITOSA");
 
-            // Recibir saludo del cliente
-            obj = entrada.readObject();
-            if (obj instanceof String) {
-                saludoCliente = (String) obj;     // ya era String
-            } else {
-                saludoCliente = String.valueOf(obj); // lo convierto a texto (maneja null)
-            }
-            System.out.println("[Hilo Cliente #" + clientId + "] dice: " + saludoCliente);
+            String mensaje = (String) entrada.readObject();
+            do {
+                if (mensaje.startsWith("/privado ")) {
+                    String[] partes = mensaje.split(" ", 3);
+                    if (partes.length == 3) {
+                        servidor.enviarMensajePrivado(usuario, partes[1], partes[2]);
+                    }
+                } else {
+                    servidor.enviarMensajePublico(usuario, mensaje);
+                }
+                
+            } while (mensaje != null || !mensaje.equals("/salir")); //si da fallos cambiar los palos por &&
 
         } catch (Exception e) {
-            System.out.println("[Hilo Cliente #" + clientId + "] Error: " + e.getMessage());
+            System.out.println("Cliente desconectado: " + usuario);
         } finally {
-            int restantes = conexionesActivas.decrementar();
-            System.out.println("[Hilo Cliente #" + clientId + "] finalizado. Conexiones activas: " + restantes);
+            servidor.clienteDesconectado(usuario);
+        }
+    }
+
+    public void enviarMensaje(String mensaje) {
+        try {
+            salida.writeObject(mensaje);
+            salida.flush();
+        } catch (IOException e) {
+            System.err.println("Error enviando a " + usuario);
         }
     }
 }
