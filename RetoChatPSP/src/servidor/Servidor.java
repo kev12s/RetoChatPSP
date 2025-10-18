@@ -56,8 +56,8 @@ public class Servidor {
                 Socket socket = serverSocket.accept();
                 
                 if (contadorClientes.getContador() < max_clientes) {
-                    ManejadorCliente handler = new ManejadorCliente(socket, this);
-                    new Thread(handler).start();
+                    ManejadorCliente manejador = new ManejadorCliente(socket, this);
+                    new Thread(manejador).start();
                 } else {
                     ObjectOutputStream salida = new ObjectOutputStream(socket.getOutputStream());
                     salida.writeObject("ERROR: Servidor lleno");
@@ -88,10 +88,11 @@ public class Servidor {
     }
      
       // MÉTODOS PRINCIPALES QUE HAY QUE IMPLEMENTAR
-    public synchronized void registrarClienteConectado(String usuario, ManejadorCliente handler) {
-        clientesConectados.put(usuario, handler);
+    public synchronized void registrarClienteConectado(String usuario, ManejadorCliente manejador) {
+        clientesConectados.put(usuario, manejador);
         contadorClientes.incrementar();
         log("Usuario conectado: " + usuario);
+        manejador.enviarMensaje("CONEXION_EXITOSA");
         informarATodos("SERVIDOR: " + usuario + " se ha unido al chat", null);
     }
     

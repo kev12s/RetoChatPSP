@@ -10,6 +10,7 @@ public class Cliente {
     private ObjectInputStream entrada;
     private String usuario;
     private boolean conectado = false;
+    private boolean detenerRecepcion = false;
 
     public boolean conectar(String servidor, int puerto, String usuario) {
         try {
@@ -44,8 +45,12 @@ public class Cliente {
         enviarMensaje("/privado " + destinatario + " " + mensaje);
     }
 
+    public void detenerRecepcion() {
+        detenerRecepcion = true; // ← Para que el hilo receptor se detenga
+    }
+
     public String recibirMensaje() throws IOException, ClassNotFoundException {
-        if (conectado) {
+        if (conectado && !detenerRecepcion) {
             return (String) entrada.readObject();
         }
         return null;
@@ -57,16 +62,22 @@ public class Cliente {
             if (salida != null) {
                 salida.writeObject("/salir");
             }
-            if (salida != null) {
-                salida.close();
-            }
-            if (entrada != null) {
-                entrada.close();
-            }
-            if (socket != null) {
-                socket.close();
-            }
         } catch (IOException e) {
+
+        } finally {
+            try {
+                if (salida != null) {
+                    salida.close();
+                }
+                if (entrada != null) {
+                    entrada.close();
+                }
+                if (socket != null) {
+                    socket.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
