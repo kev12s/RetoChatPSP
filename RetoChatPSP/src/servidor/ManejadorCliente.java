@@ -26,8 +26,13 @@ public class ManejadorCliente implements Runnable {
             servidor.registrarClienteConectado(usuario, this);
             salida.writeObject("CONEXION_EXITOSA");
 
-            String mensaje = (String) entrada.readObject();
-            do {
+            //El bucle de los mensajes
+            while (true) {
+                String mensaje = (String) entrada.readObject();
+                if (mensaje == null || mensaje.equals("/salir")) {
+                    break;
+                }
+
                 if (mensaje.startsWith("/privado ")) {
                     String[] partes = mensaje.split(" ", 3);
                     if (partes.length == 3) {
@@ -36,9 +41,7 @@ public class ManejadorCliente implements Runnable {
                 } else {
                     servidor.enviarMensajePublico(usuario, mensaje);
                 }
-                
-            } while (mensaje != null || !mensaje.equals("/salir")); //si da fallos cambiar los palos por &&
-
+            }
         } catch (Exception e) {
             System.out.println("Cliente desconectado: " + usuario);
         } finally {
@@ -49,7 +52,7 @@ public class ManejadorCliente implements Runnable {
     public void enviarMensaje(String mensaje) {
         try {
             salida.writeObject(mensaje);
-            salida.flush();
+            salida.flush(); //hace que se envie el mensaje al momento
         } catch (IOException e) {
             System.err.println("Error enviando a " + usuario);
         }

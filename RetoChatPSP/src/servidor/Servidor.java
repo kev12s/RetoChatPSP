@@ -10,6 +10,8 @@ package servidor;
  * @author 2dami
  */
 import java.awt.List;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.io.ObjectInputStream;
@@ -29,7 +31,7 @@ public class Servidor {
     private int max_clientes = 3;
     private ServerSocket serverSocket;
     
-    //atributos para 
+    //atributos para los registros 
     private Map<String, ManejadorCliente> clientesConectados;
     private ArrayList<String> logMensajes;
     private Date fechaInicio;
@@ -40,7 +42,7 @@ public class Servidor {
         this.clientesConectados = new HashMap<>();
         this.logMensajes = new ArrayList<>();
         this.fechaInicio = new Date();
-        this.ultimoMensaje = "Ninguno";
+        this.ultimoMensaje = "Ninguno"; //hay que implementar
         this.contadorClientes = new Contador();
     }
 
@@ -68,12 +70,20 @@ public class Servidor {
         }
     }
     
-    //ESCRIBIR LOS LOGS EN UN FICHERO?!?!?!?!
+    
      private synchronized void log(String mensaje) {
+        File fichLogs = new File("logs.dat");
         String logGuardado = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + " - " + mensaje;
         logMensajes.add(logGuardado);
         
-        //SERIA ESCRIBIR EN UN FICHERO EN VEZ DE MOSTRAR POR CONSOLA
+        try {
+            ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(fichLogs));
+            oos.writeObject(logGuardado);
+            oos.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
         System.out.println(logGuardado);
     }
      
@@ -85,6 +95,7 @@ public class Servidor {
         informarATodos("SERVIDOR: " + usuario + " se ha unido al chat", null);
     }
     
+    //desconecta al cliente
     public synchronized void clienteDesconectado(String usuario) {
         if (clientesConectados.remove(usuario) != null) {
         contadorClientes.decrementar();

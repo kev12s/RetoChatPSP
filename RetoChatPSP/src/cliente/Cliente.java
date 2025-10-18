@@ -1,64 +1,80 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package cliente;
 
-/**
- *
- * @author 2dami
- */
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.Socket;
+import java.io.*;
+import java.net.*;
 
-/**
- *
- * @author barai
- */
 public class Cliente {
-    
-    private final int PUERTO = 5000;
-    private final String IP = "127.0.0.1";
 
-    public void iniciar() {
-        Socket cliente = null;
-        ObjectInputStream entrada = null;
-        ObjectOutputStream salida = null;
+    private Socket socket;
+    private ObjectOutputStream salida;
+    private ObjectInputStream entrada;
+    private String usuario;
+    private boolean conectado = false;
+
+    public boolean conectar(String servidor, int puerto, String usuario) {
         try {
-            cliente = new Socket(IP, PUERTO);
-            System.out.println("Conexión realizada con servidor");
-            salida = new ObjectOutputStream(cliente.getOutputStream());
-            entrada = new ObjectInputStream(cliente.getInputStream());
-            String mensaje = (String) entrada.readObject();
-            System.out.println(mensaje);
-            
-        } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
-        } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
-        } finally {
-            try {
-                if (entrada != null) {
-                    entrada.close();
-                }
-                if (salida != null) {
-                    salida.close();
-                }
-                if (cliente != null) {
-                    cliente.close();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
+            this.usuario = usuario;
+            socket = new Socket(servidor, puerto);
+            salida = new ObjectOutputStream(socket.getOutputStream());
+            entrada = new ObjectInputStream(socket.getInputStream());
+
+            // Enviar usuario
+            salida.writeObject(usuario);
+
+            // Recibir confirmación
+            String respuesta = (String) entrada.readObject();
+            if ("CONEXION_EXITOSA".equals(respuesta)) {
+                conectado = true;
+                return true;
             }
-            System.out.println("Fin cliente");
+
+        } catch (Exception e) {
+            System.out.println("Error conectando: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public void enviarMensaje(String mensaje) throws IOException {
+        if (conectado) {
+            salida.writeObject(mensaje);
         }
     }
 
-    public static void main(String[] args) {
-        Cliente c = new Cliente();
-        c.iniciar();
+    public void enviarMensajePrivado(String destinatario, String mensaje) throws IOException {
+        enviarMensaje("/privado " + destinatario + " " + mensaje);
+    }
+
+    public String recibirMensaje() throws IOException, ClassNotFoundException {
+        if (conectado) {
+            return (String) entrada.readObject();
+        }
+        return null;
+    }
+
+    public void desconectar() {
+        conectado = false;
+        try {
+            if (salida != null) {
+                salida.writeObject("/salir");
+            }
+            if (salida != null) {
+                salida.close();
+            }
+            if (entrada != null) {
+                entrada.close();
+            }
+            if (socket != null) {
+                socket.close();
+            }
+        } catch (IOException e) {
+        }
+    }
+
+    public boolean isConectado() {
+        return conectado;
+    }
+
+    public String getUsuario() {
+        return usuario;
     }
 }
