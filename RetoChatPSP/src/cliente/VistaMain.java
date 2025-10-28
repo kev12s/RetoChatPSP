@@ -154,7 +154,24 @@ public class VistaMain extends javax.swing.JFrame {
         String servidor = txtFieldIP.getText();
         int puerto = Integer.parseInt(txtFieldPuerto.getText());
 
-        cliente.conectar(servidor, puerto, user);
+        if (cliente.conectar(servidor, puerto, user)) {
+            new Thread(() -> {
+                try {
+                    while (true) {
+                        String mensaje = (String) txtFieldEnviarMensaje.getText();
+                        javax.swing.SwingUtilities.invokeLater(() -> {
+                            textAreaMensajes.append(mensaje + "\n");
+                        });
+                    }
+                } catch (Exception e) {
+                    System.out.println("Desconectado del servidor");
+                }
+            }
+            ).start();
+        }else{
+            System.out.println("Error en la conexion");
+        }
+
     }//GEN-LAST:event_btnConectarActionPerformed
 
     // Metodo para poder sacar el nombre de usuario cuando va ha conectarse
@@ -204,12 +221,20 @@ public class VistaMain extends javax.swing.JFrame {
         String mensaje = textAreaMensajes.getText();
 
         try {
-            if (txtFieldDestinatario.getText() != null) {
-                String destino = txtFieldDestinatario.getText();
-                cliente.enviarMensajePrivado(destino, mensaje);
-            }else{
-                cliente.enviarMensaje(mensaje);
+            String user = userName.getText();
+
+            String servidor = txtFieldIP.getText();
+            int puerto = Integer.parseInt(txtFieldPuerto.getText());
+            if (cliente.conectar(servidor, puerto, user)) {
+                if (txtFieldDestinatario.getText() != null) {
+                    String destino = txtFieldDestinatario.getText();
+
+                    cliente.enviarMensajePrivado(destino, mensaje);
+                } else {
+                    cliente.enviarMensaje(mensaje);
+                }
             }
+
         } catch (IOException ex) {
             Logger.getLogger(VistaMain.class.getName()).log(Level.SEVERE, null, ex);
         }
