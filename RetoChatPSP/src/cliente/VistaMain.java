@@ -10,6 +10,9 @@ import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.*;
@@ -19,6 +22,12 @@ import javax.swing.*;
  * @author 2dami
  */
 public class VistaMain extends javax.swing.JFrame {
+    // Variables para la lista sincronizada y control de hilos
+    private final List<String> mensajesRecibidos = Collections.synchronizedList(new ArrayList<>());
+    private volatile boolean ejecutando = false;
+    private Thread hiloRecepcion;
+    private Thread hiloActualizacionUI;
+    private final Cliente cliente = new Cliente();
 
     /**
      * Creates new form MainView
@@ -147,34 +156,127 @@ public class VistaMain extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-    private void btnConectarActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnConectarActionPerformed
+    private void btnConectarActionPerformed(java.awt.event.ActionEvent evt) {
         String user = obtenerNombreUser();
+        if (user == null || user.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, 
+                "Debe ingresar un nombre de usuario válido", 
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Detener hilos anteriores si están en ejecución
+        detenerHilos();
+        
         userName.setText(user);
-
         String servidor = txtFieldIP.getText();
         int puerto = Integer.parseInt(txtFieldPuerto.getText());
 
         if (cliente.conectar(servidor, puerto, user)) {
-            new Thread(() -> {
-                try {
-                    while (true) {
-                        String mensaje = (String) txtFieldEnviarMensaje.getText();
-                        javax.swing.SwingUtilities.invokeLater(() -> {
-                            textAreaMensajes.append(mensaje + "\n");
-                        });
+            // Limpiar mensajes anteriores
+            mensajesRecibidos.clear();
+            ejecutando = true;
+            
+            // Hilo para recibir mensajes del servidor
+            hiloRecepcion = new Thread(() -> {
+                while (ejecutando && cliente.isConectado()) {
+                    try {
+                        String mensaje = cliente.recibirMensaje();
+                        if (mensaje != null) {
+                            actualizarAreaMensajes(mensaje);
+                        }
+                    } catch (Exception e) {
+                        if (ejecutando && cliente.isConectado()) {
+                            actualizarAreaMensajes("Error al recibir mensaje: " + e.getMessage());
+                        }
+                        break;
                     }
-                } catch (Exception e) {
-                    System.out.println("Desconectado del servidor");
                 }
-            }
-            ).start();
-        }else{
-            System.out.println("Error en la conexion");
+                actualizarAreaMensajes("Desconectado del servidor");
+            });
+            
+            // Hilo para actualizar la interfaz de usuario
+            hiloActualizacionUI = new Thread(() -> {
+                while (ejecutando) {
+                    try {
+                        java.awt.EventQueue.invokeAndWait(this::actualizarUI);
+                        Thread.sleep(100); // Actualizar cada 100ms
+                    } catch (Exception e) {
+                        if (ejecutando) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            });
+            
+            // Iniciar los hilos
+            hiloRecepcion.start();
+            hiloActualizacionUI.start();
+            
+            actualizarAreaMensajes("Conectado al servidor como: " + user);
+        } else {
+            JOptionPane.showMessageDialog(this, 
+                "No se pudo conectar al servidor", 
+                "Error de conexión", 
+                JOptionPane.ERROR_MESSAGE);
         }
+    }
 
-    }//GEN-LAST:event_btnConectarActionPerformed
-
-    // Metodo para poder sacar el nombre de usuario cuando va ha conectarse
+    // Método para actualizar el área de mensajes de forma segura
+    private void actualizarAreaMensajes(String mensaje) {
+        if (mensaje != null && !mensaje.trim().isEmpty()) {
+            synchronized(mensajesRecibidos) {
+                mensajesRecibidos.add(mensaje);
+            }
+        }
+    }
+    
+    // Método para actualizar la interfaz de usuario
+    private void actualizarUI() {
+        // Hacer una copia sincronizada de los mensajes
+        List<String> copiaMensajes;
+        synchronized(mensajesRecibidos) {
+            if (mensajesRecibidos.isEmpty()) {
+                return;
+            }
+            copiaMensajes = new ArrayList<>(mensajesRecibidos);
+            mensajesRecibidos.clear();
+        }
+        
+        // Actualizar la interfaz de usuario
+        for (String mensaje : copiaMensajes) {
+            textAreaMensajes.append(mensaje + "\n");
+        }
+        if (!copiaMensajes.isEmpty()) {
+            textAreaMensajes.setCaretPosition(textAreaMensajes.getDocument().getLength());
+        }
+    }
+    
+    // Método para detener los hilos de forma segura
+    private void detenerHilos() {
+        ejecutando = false;
+        
+        if (hiloRecepcion != null && hiloRecepcion.isAlive()) {
+            hiloRecepcion.interrupt();
+            try {
+                hiloRecepcion.join(1000); // Esperar hasta 1 segundo
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        if (hiloActualizacionUI != null && hiloActualizacionUI.isAlive()) {
+            hiloActualizacionUI.interrupt();
+            try {
+                hiloActualizacionUI.join(1000); // Esperar hasta 1 segundo
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    // Método para obtener el nombre de usuario
     private String obtenerNombreUser() {
         // Crear un diálogo modal (ventana emergente)
         JDialog popup = new JDialog(this, "Introducir username", true);
@@ -217,31 +319,38 @@ public class VistaMain extends javax.swing.JFrame {
         return name;
     }
 
-    private void btnEnviar1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnEnviar1ActionPerformed
-        String mensaje = textAreaMensajes.getText();
+    private void btnEnviar1ActionPerformed(java.awt.event.ActionEvent evt) {
+        String mensaje = txtFieldEnviarMensaje.getText().trim();
+        String destinatario = txtFieldDestinatario.getText().trim();
+
+        if (mensaje.isEmpty()) {
+            return;
+        }
 
         try {
-            String user = userName.getText();
-
-            String servidor = txtFieldIP.getText();
-            int puerto = Integer.parseInt(txtFieldPuerto.getText());
-            if (cliente.conectar(servidor, puerto, user)) {
-                if (txtFieldDestinatario.getText() != null) {
-                    String destino = txtFieldDestinatario.getText();
-
-                    cliente.enviarMensajePrivado(destino, mensaje);
-                } else {
-                    cliente.enviarMensaje(mensaje);
+            if (!destinatario.isEmpty() && !destinatario.equals("jTextField1")) {
+                // Enviar mensaje privado
+                cliente.enviarMensajePrivado(destinatario, mensaje);
+                synchronized(mensajesRecibidos) {
+                    mensajesRecibidos.add("Tú (a " + destinatario + "): " + mensaje);
+                }
+            } else {
+                // Enviar mensaje público
+                cliente.enviarMensaje(mensaje);
+                synchronized(mensajesRecibidos) {
+                    mensajesRecibidos.add("Tú: " + mensaje);
                 }
             }
-
+            txtFieldEnviarMensaje.setText(""); // Limpiar campo de texto
         } catch (IOException ex) {
-            Logger.getLogger(VistaMain.class.getName()).log(Level.SEVERE, null, ex);
+            synchronized(mensajesRecibidos) {
+                mensajesRecibidos.add("Error al enviar mensaje: " + ex.getMessage());
+            }
         }
-    }//GEN-LAST:event_btnEnviar1ActionPerformed
+    }
 
-    private void txtFieldDestinatarioActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_txtFieldDestinatarioActionPerformed
-    }//GEN-LAST:event_txtFieldDestinatarioActionPerformed
+    private void txtFieldDestinatarioActionPerformed(java.awt.event.ActionEvent evt) {
+    }
 
     /**
      * @param args the command line arguments
@@ -291,8 +400,15 @@ public class VistaMain extends javax.swing.JFrame {
     private JTextField txtFieldIP;
     private JTextField txtFieldPuerto;
     private JLabel userName;
-    private Cliente cliente;
     private String name;
 
+    
+    @Override
+    public void dispose() {
+        detenerHilos();
+        cliente.desconectar();
+        super.dispose();
+    }
+    
     // End of variables declaration//GEN-END:variables
 }

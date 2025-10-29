@@ -137,7 +137,8 @@ public class Servidor {
     }
 
     public synchronized void enviarMensajePublico(String usuario, String mensaje) {
-        String mensajeCompleto = "PUBLICO [" + usuario + "]: " + mensaje;      
+        String 
+         = "PUBLICO [" + usuario + "]: " + mensaje;      
         informarATodos(mensajeCompleto, usuario);
         ultimoMensaje=mensaje;
         log("Mensaje público de " + usuario + ": " + mensaje);
