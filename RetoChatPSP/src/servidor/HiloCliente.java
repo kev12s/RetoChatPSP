@@ -3,14 +3,14 @@ package servidor;
 import java.io.*;
 import java.net.*;
 
-public class ManejadorCliente implements Runnable {
+public class HiloCliente implements Runnable {
 
     private Socket socket;
     private Servidor servidor;
     private ObjectOutputStream salida;
     private String usuario;
 
-    public ManejadorCliente(Socket socket, Servidor servidor) {
+    public HiloCliente(Socket socket, Servidor servidor) {
         this.socket = socket;
         this.servidor = servidor;
     }

@@ -37,7 +37,7 @@ public class Servidor {
     private int intervaloEstadisticas = 10000;
 
     //atributos para los registros 
-    private Map<String, ManejadorCliente> clientesConectados;
+    private Map<String, HiloCliente> clientesConectados;
     private ArrayList<String> logMensajes;
     private Date fechaInicio;
     private String ultimoMensaje;
@@ -88,8 +88,8 @@ public class Servidor {
                 Socket socket = serverSocket.accept();
 
                 if (contadorClientes.getContador() < max_clientes) {
-                    ManejadorCliente manejador = new ManejadorCliente(socket, this);
-                    new Thread(manejador).start();
+                    HiloCliente hiloCliente = new HiloCliente(socket, this);
+                    new Thread(hiloCliente).start();
                 } else {
                     ObjectOutputStream salida = new ObjectOutputStream(socket.getOutputStream());
                     salida.writeObject("ERROR: Servidor lleno");
@@ -119,7 +119,7 @@ public class Servidor {
     }
      
       // MÉTODOS PRINCIPALES QUE HAY QUE IMPLEMENTAR
-    public synchronized void registrarClienteConectado(String usuario, ManejadorCliente manejador) {
+    public synchronized void registrarClienteConectado(String usuario, HiloCliente manejador) {
         clientesConectados.put(usuario, manejador);
         contadorClientes.incrementar();
         log("Usuario conectado: " + usuario);
@@ -137,16 +137,15 @@ public class Servidor {
     }
 
     public synchronized void enviarMensajePublico(String usuario, String mensaje) {
-        String 
-         = "PUBLICO [" + usuario + "]: " + mensaje;      
+        String mensajeCompleto = "PUBLICO [" + usuario + "]: " + mensaje;      
         informarATodos(mensajeCompleto, usuario);
         ultimoMensaje=mensaje;
         log("Mensaje público de " + usuario + ": " + mensaje);
     }
 
     public synchronized void enviarMensajePrivado(String usuarioActual, String destinatario, String mensaje) {
-        ManejadorCliente manejadorDestino = clientesConectados.get(destinatario);
-        ManejadorCliente manejadorRemitente = clientesConectados.get(usuarioActual);
+        HiloCliente manejadorDestino = clientesConectados.get(destinatario);
+        HiloCliente manejadorRemitente = clientesConectados.get(usuarioActual);
 
         if (manejadorDestino != null && manejadorRemitente != null) {
             String mensajePrivado = "PRIVADO de " + usuarioActual + ": " + mensaje;
@@ -160,7 +159,7 @@ public class Servidor {
     }
 
     private synchronized void informarATodos(String mensaje, String usuarioActual) {
-        for (Map.Entry<String, ManejadorCliente> entry : clientesConectados.entrySet()) {
+        for (Map.Entry<String, HiloCliente> entry : clientesConectados.entrySet()) {
             if (!entry.getKey().equals(usuarioActual)) {
                 entry.getValue().enviarMensaje(mensaje);
             }
