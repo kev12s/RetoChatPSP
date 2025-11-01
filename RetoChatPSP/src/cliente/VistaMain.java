@@ -16,18 +16,21 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.*;
+import servidor.ListaClientes;
 
 /**
  *
  * @author 2dami
  */
 public class VistaMain extends javax.swing.JFrame {
-    // Variables para la lista sincronizada y control de hilos
-    private final List<String> mensajesRecibidos = Collections.synchronizedList(new ArrayList<>());
+
+    // Lista para almacenar los mensajes recibidos
+    private final List<String> mensajesRecibidos = new ArrayList<>();
     private volatile boolean ejecutando = false;
     private Thread hiloRecepcion;
     private Thread hiloActualizacionUI;
     private final Cliente cliente = new Cliente();
+    private ListaClientes listaClietes = new ListaClientes();
 
     /**
      * Creates new form MainView
@@ -159,16 +162,18 @@ public class VistaMain extends javax.swing.JFrame {
     private void btnConectarActionPerformed(java.awt.event.ActionEvent evt) {
         String user = obtenerNombreUser();
         if (user == null || user.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, 
-                "Debe ingresar un nombre de usuario válido", 
-                "Error", 
-                JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Debe ingresar un nombre de usuario válido", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        
+
+        if (listaClietes.existeUsuario(user)) {
+            JOptionPane.showMessageDialog(this, "Ese usuario ya existe. Prueba otro nombre", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         // Detener hilos anteriores si están en ejecución
         detenerHilos();
-        
+
         userName.setText(user);
         String servidor = txtFieldIP.getText();
         int puerto = Integer.parseInt(txtFieldPuerto.getText());
@@ -177,7 +182,7 @@ public class VistaMain extends javax.swing.JFrame {
             // Limpiar mensajes anteriores
             mensajesRecibidos.clear();
             ejecutando = true;
-            
+
             // Hilo para recibir mensajes del servidor
             hiloRecepcion = new Thread(() -> {
                 while (ejecutando && cliente.isConectado()) {
@@ -195,55 +200,58 @@ public class VistaMain extends javax.swing.JFrame {
                 }
                 actualizarAreaMensajes("Desconectado del servidor");
             });
-            
+
             // Hilo para actualizar la interfaz de usuario
-            hiloActualizacionUI = new Thread(() -> {
-                while (ejecutando) {
-                    try {
-                        java.awt.EventQueue.invokeAndWait(this::actualizarUI);
-                        Thread.sleep(100); // Actualizar cada 100ms
-                    } catch (Exception e) {
-                        if (ejecutando) {
-                            e.printStackTrace();
+            hiloActualizacionUI = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    while (ejecutando) {
+                        try {
+                            java.awt.EventQueue.invokeAndWait(new Runnable() {
+                                @Override
+                                public void run() {
+                                    actualizarUI();
+                                }
+                            });
+                            Thread.sleep(100); // Actualizar cada 100ms
+                        } catch (Exception e) {
+                            if (ejecutando) {
+                                e.printStackTrace();
+                            }
                         }
                     }
                 }
             });
-            
+
             // Iniciar los hilos
             hiloRecepcion.start();
             hiloActualizacionUI.start();
-            
+
             actualizarAreaMensajes("Conectado al servidor como: " + user);
         } else {
-            JOptionPane.showMessageDialog(this, 
-                "No se pudo conectar al servidor", 
-                "Error de conexión", 
-                JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "No se pudo conectar al servidor",
+                    "Error de conexión",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    // Método para actualizar el área de mensajes de forma segura
-    private void actualizarAreaMensajes(String mensaje) {
+    // Método para actualizar el área de mensajes
+    private synchronized void actualizarAreaMensajes(String mensaje) {
         if (mensaje != null && !mensaje.trim().isEmpty()) {
-            synchronized(mensajesRecibidos) {
-                mensajesRecibidos.add(mensaje);
-            }
+            mensajesRecibidos.add(mensaje);
         }
     }
-    
+
     // Método para actualizar la interfaz de usuario
-    private void actualizarUI() {
-        // Hacer una copia sincronizada de los mensajes
-        List<String> copiaMensajes;
-        synchronized(mensajesRecibidos) {
-            if (mensajesRecibidos.isEmpty()) {
-                return;
-            }
-            copiaMensajes = new ArrayList<>(mensajesRecibidos);
-            mensajesRecibidos.clear();
+    private synchronized void actualizarUI() {
+        // Hacer una copia de los mensajes
+        if (mensajesRecibidos.isEmpty()) {
+            return;
         }
-        
+        List<String> copiaMensajes = new ArrayList<>(mensajesRecibidos);
+        mensajesRecibidos.clear();
+
         // Actualizar la interfaz de usuario
         for (String mensaje : copiaMensajes) {
             textAreaMensajes.append(mensaje + "\n");
@@ -252,11 +260,11 @@ public class VistaMain extends javax.swing.JFrame {
             textAreaMensajes.setCaretPosition(textAreaMensajes.getDocument().getLength());
         }
     }
-    
+
     // Método para detener los hilos de forma segura
     private void detenerHilos() {
         ejecutando = false;
-        
+
         if (hiloRecepcion != null && hiloRecepcion.isAlive()) {
             hiloRecepcion.interrupt();
             try {
@@ -265,7 +273,7 @@ public class VistaMain extends javax.swing.JFrame {
                 Thread.currentThread().interrupt();
             }
         }
-        
+
         if (hiloActualizacionUI != null && hiloActualizacionUI.isAlive()) {
             hiloActualizacionUI.interrupt();
             try {
@@ -275,7 +283,7 @@ public class VistaMain extends javax.swing.JFrame {
             }
         }
     }
-    
+
     // Método para obtener el nombre de usuario
     private String obtenerNombreUser() {
         // Crear un diálogo modal (ventana emergente)
@@ -331,21 +339,15 @@ public class VistaMain extends javax.swing.JFrame {
             if (!destinatario.isEmpty() && !destinatario.equals("jTextField1")) {
                 // Enviar mensaje privado
                 cliente.enviarMensajePrivado(destinatario, mensaje);
-                synchronized(mensajesRecibidos) {
-                    mensajesRecibidos.add("Tú (a " + destinatario + "): " + mensaje);
-                }
+                mensajesRecibidos.add("Tú (a " + destinatario + "): " + mensaje);
             } else {
                 // Enviar mensaje público
                 cliente.enviarMensaje(mensaje);
-                synchronized(mensajesRecibidos) {
-                    mensajesRecibidos.add("Tú: " + mensaje);
-                }
+                mensajesRecibidos.add("Tú: " + mensaje);
             }
             txtFieldEnviarMensaje.setText(""); // Limpiar campo de texto
         } catch (IOException ex) {
-            synchronized(mensajesRecibidos) {
-                mensajesRecibidos.add("Error al enviar mensaje: " + ex.getMessage());
-            }
+            mensajesRecibidos.add("Error al enviar mensaje: " + ex.getMessage());
         }
     }
 
@@ -402,7 +404,6 @@ public class VistaMain extends javax.swing.JFrame {
     private JLabel userName;
     private String name;
 
-    
     @Override
     public void dispose() {
         detenerHilos();
@@ -410,5 +411,6 @@ public class VistaMain extends javax.swing.JFrame {
         super.dispose();
     }
     
+
     // End of variables declaration//GEN-END:variables
 }

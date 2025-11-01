@@ -29,7 +29,6 @@ public class Servidor {
 
     //atributos para la conexion
     private int puerto = 5000;
-    private Contador contadorClientes;
     private int max_clientes = 3;
     private ServerSocket serverSocket;
     private Thread hiloEstadisticas;
@@ -37,25 +36,23 @@ public class Servidor {
     private int intervaloEstadisticas = 10000;
 
     //atributos para los registros 
-    private Map<String, HiloCliente> clientesConectados;
     private ArrayList<String> logMensajes;
     private Date fechaInicio;
-    private String ultimoMensaje;
-    //mas adelante hay que añadiir las estadisticas del servidor y un metodo para sacarlas  
+    private String ultimoMensaje; 
+    private ListaClientes listaClientes;
 
     public Servidor() {
-        this.clientesConectados = new HashMap<>();
         this.logMensajes = new ArrayList<>();
         this.fechaInicio = new Date();
-        this.ultimoMensaje = "Ninguno"; //hay que implementar
-        this.contadorClientes = new Contador();
+        this.ultimoMensaje = "Ninguno"; 
+        this.listaClientes = new ListaClientes();
     }
 
     public void iniciar() {
         try {
             serverSocket = new ServerSocket(puerto);
             System.out.println("Servidor iniciado en puerto " + puerto);
-            log("Servidor iniciado");
+            log("Servidor iniciado en puerto " + puerto);
 
             //hilo para que salgan estadisticas
             hiloEstadisticas = new Thread(new Runnable() {
@@ -64,7 +61,7 @@ public class Servidor {
                     while (estadisticasEjecutandose) {
                         try {
                             long tiempoActivo = (new Date().getTime() - fechaInicio.getTime()) / 1000;
-                            int usuariosConectados = contadorClientes.getContador();
+                            int usuariosConectados = listaClientes.getContadorClientesConectados();
 
                             System.out.println("=== ESTADÍSTICAS DEL SERVIDOR ===");
                             System.out.println("Hora: " + new SimpleDateFormat("HH:mm:ss").format(new Date()));
@@ -83,11 +80,12 @@ public class Servidor {
             //corre el hilo de estadisticas
             hiloEstadisticas.start();
 
-            //
+            //bucle para aceptar un máximo de 3 clientes
             while (true) {
                 Socket socket = serverSocket.accept();
-
-                if (contadorClientes.getContador() < max_clientes) {
+                
+                //contador manejado con la lista sincronizada de la clase ListaClientes
+                if (listaClientes.getContadorClientesConectados() < max_clientes) {
                     HiloCliente hiloCliente = new HiloCliente(socket, this);
                     new Thread(hiloCliente).start();
                 } else {
@@ -102,7 +100,8 @@ public class Servidor {
         }
     }
 
-    private synchronized void log(String mensaje) {
+    //metodo para los logs, escribe en un fichero
+    private void log(String mensaje) {
         File fichLogs = new File("logs.dat");
         String logGuardado = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + " - " + mensaje;
         logMensajes.add(logGuardado);
@@ -119,47 +118,52 @@ public class Servidor {
     }
      
       // MÉTODOS PRINCIPALES QUE HAY QUE IMPLEMENTAR
-    public synchronized void registrarClienteConectado(String usuario, HiloCliente manejador) {
-        clientesConectados.put(usuario, manejador);
-        contadorClientes.incrementar();
+    
+    //conecta al cliente usando la clase ListaClientes
+    public void registrarClienteConectado(String usuario, HiloCliente hilo) {
+        if(listaClientes.registrarClienteConectado(usuario, hilo)){
         log("Usuario conectado: " + usuario);
-        manejador.enviarMensaje("CONEXION_EXITOSA");
+        hilo.enviarMensaje("CONEXION_EXITOSA");
         informarATodos("SERVIDOR: " + usuario + " se ha unido al chat", null);
+        }else{
+            
+        }
     }
 
-    //desconecta al cliente
-    public synchronized void clienteDesconectado(String usuario) {
-        if (clientesConectados.remove(usuario) != null) {
-            contadorClientes.decrementar();
+    //desconecta al cliente usando la clase ListaClientes
+    public void clienteDesconectado(String usuario) {
+        if (listaClientes.clienteDesconectado(usuario)) {
             log("Usuario desconectado: " + usuario);
             informarATodos("SERVIDOR: " + usuario + " ha abandonado el chat", null);
         }
     }
 
-    public synchronized void enviarMensajePublico(String usuario, String mensaje) {
+    public void enviarMensajePublico(String usuario, String mensaje) {
         String mensajeCompleto = "PUBLICO [" + usuario + "]: " + mensaje;      
         informarATodos(mensajeCompleto, usuario);
         ultimoMensaje=mensaje;
         log("Mensaje público de " + usuario + ": " + mensaje);
     }
 
-    public synchronized void enviarMensajePrivado(String usuarioActual, String destinatario, String mensaje) {
-        HiloCliente manejadorDestino = clientesConectados.get(destinatario);
-        HiloCliente manejadorRemitente = clientesConectados.get(usuarioActual);
+    public void enviarMensajePrivado(String usuarioActual, String destinatario, String mensaje) {
+        HiloCliente hiloDestino = listaClientes.getClientesConectados().get(destinatario);
+        HiloCliente hiloRemitente = listaClientes.getClientesConectados().get(usuarioActual);
 
-        if (manejadorDestino != null && manejadorRemitente != null) {
+        if (hiloDestino != null && hiloRemitente != null) {
             String mensajePrivado = "PRIVADO de " + usuarioActual + ": " + mensaje;
             String mensajeConfirmacion = "PRIVADO para " + destinatario + ": " + mensaje;
 
-            manejadorDestino.enviarMensaje(mensajePrivado);
-            manejadorRemitente.enviarMensaje(mensajeConfirmacion);
+            hiloDestino.enviarMensaje(mensajePrivado);
+            hiloRemitente.enviarMensaje(mensajeConfirmacion);
             ultimoMensaje = "PRIVADO: " + usuarioActual + " a " + destinatario + ": " + mensaje;;
             log("Mensaje privado " + usuarioActual + " a " + destinatario + ": " + mensaje);
         }
     }
 
-    private synchronized void informarATodos(String mensaje, String usuarioActual) {
-        for (Map.Entry<String, HiloCliente> entry : clientesConectados.entrySet()) {
+    //metodo para enviar el mensaje público a cada cliente que usamos en el método enviar mensaje público, 
+    //tambien usamos la clase ListaClientes para enviarselo a todos menos a si mismo
+    private void informarATodos(String mensaje, String usuarioActual) {
+        for (Map.Entry<String, HiloCliente> entry : listaClientes.getClientesConectados().entrySet()) {
             if (!entry.getKey().equals(usuarioActual)) {
                 entry.getValue().enviarMensaje(mensaje);
             }
