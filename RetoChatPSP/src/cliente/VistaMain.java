@@ -30,7 +30,6 @@ public class VistaMain extends javax.swing.JFrame {
     private Thread hiloRecepcion;
     private Thread hiloActualizacionUI;
     private final Cliente cliente = new Cliente();
-    private ListaClientes listaClietes = new ListaClientes();
 
     /**
      * Creates new form MainView
@@ -166,11 +165,6 @@ public class VistaMain extends javax.swing.JFrame {
             return;
         }
 
-        if (listaClietes.existeUsuario(user)) {
-            JOptionPane.showMessageDialog(this, "Ese usuario ya existe. Prueba otro nombre", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
         // Detener hilos anteriores si están en ejecución
         detenerHilos();
 
@@ -182,6 +176,7 @@ public class VistaMain extends javax.swing.JFrame {
             // Limpiar mensajes anteriores
             mensajesRecibidos.clear();
             ejecutando = true;
+            btnConectar.setEnabled(false);
 
             // Hilo para recibir mensajes del servidor
             hiloRecepcion = new Thread(() -> {
@@ -202,22 +197,19 @@ public class VistaMain extends javax.swing.JFrame {
             });
 
             // Hilo para actualizar la interfaz de usuario
-            hiloActualizacionUI = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    while (ejecutando) {
-                        try {
-                            java.awt.EventQueue.invokeAndWait(new Runnable() {
-                                @Override
-                                public void run() {
-                                    actualizarUI();
-                                }
-                            });
-                            Thread.sleep(100); // Actualizar cada 100ms
-                        } catch (Exception e) {
-                            if (ejecutando) {
-                                e.printStackTrace();
+            hiloActualizacionUI = new Thread(() -> {
+                while (ejecutando) {
+                    try {
+                        java.awt.EventQueue.invokeAndWait(new Runnable() {
+                            @Override
+                            public void run() {
+                                actualizarUI();
                             }
+                        });
+                        Thread.sleep(100); // Actualizar cada 100ms
+                    } catch (Exception e) {
+                        if (ejecutando) {
+                            e.printStackTrace();
                         }
                     }
                 }
@@ -410,7 +402,6 @@ public class VistaMain extends javax.swing.JFrame {
         cliente.desconectar();
         super.dispose();
     }
-    
 
     // End of variables declaration//GEN-END:variables
 }
