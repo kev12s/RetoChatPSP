@@ -61,7 +61,7 @@ public class VistaMain extends javax.swing.JFrame {
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
-        txtFieldEnviarMensaje.setText("Escribe un mensaje...");
+        txtFieldEnviarMensaje.setText("");
 
         btnConectar.setText("CONECTAR");
         btnConectar.addActionListener(new java.awt.event.ActionListener() {
@@ -168,11 +168,12 @@ public class VistaMain extends javax.swing.JFrame {
         // Detener hilos anteriores si están en ejecución
         detenerHilos();
 
-        userName.setText(user);
+        
         String servidor = txtFieldIP.getText();
         int puerto = Integer.parseInt(txtFieldPuerto.getText());
 
         if (cliente.conectar(servidor, puerto, user)) {
+            userName.setText(user);
             // Limpiar mensajes anteriores
             mensajesRecibidos.clear();
             ejecutando = true;
@@ -221,10 +222,7 @@ public class VistaMain extends javax.swing.JFrame {
 
             actualizarAreaMensajes("Conectado al servidor como: " + user);
         } else {
-            JOptionPane.showMessageDialog(this,
-                    "No se pudo conectar al servidor",
-                    "Error de conexión",
-                    JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "No se pudo conectar al servidor. Servidor lleno", "Error de conexión", JOptionPane.ERROR_MESSAGE);
         }
     }
 

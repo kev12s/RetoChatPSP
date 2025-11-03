@@ -38,13 +38,13 @@ public class Servidor {
     //atributos para los registros 
     private ArrayList<String> logMensajes;
     private Date fechaInicio;
-    private String ultimoMensaje; 
+    private String ultimoMensaje;
     private ListaClientes listaClientes;
 
     public Servidor() {
         this.logMensajes = new ArrayList<>();
         this.fechaInicio = new Date();
-        this.ultimoMensaje = "Ninguno"; 
+        this.ultimoMensaje = "Ninguno";
         this.listaClientes = new ListaClientes();
     }
 
@@ -76,14 +76,14 @@ public class Servidor {
                     }
                 }
             });
-            
+
             //corre el hilo de estadisticas
             hiloEstadisticas.start();
 
             //bucle para aceptar un máximo de 3 clientes
             while (true) {
                 Socket socket = serverSocket.accept();
-                
+
                 //contador manejado con la lista sincronizada de la clase ListaClientes
                 if (listaClientes.getContadorClientesConectados() < max_clientes) {
                     HiloCliente hiloCliente = new HiloCliente(socket, this);
@@ -107,7 +107,7 @@ public class Servidor {
         logMensajes.add(logGuardado);
 
         try {
-            ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(fichLogs));
+            ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(fichLogs, true));
             oos.writeObject(logGuardado);
             oos.close();
         } catch (Exception e) {
@@ -116,17 +116,14 @@ public class Servidor {
 
         System.out.println(logGuardado);
     }
-     
-      // MÉTODOS PRINCIPALES QUE HAY QUE IMPLEMENTAR
-    
+
+    // MÉTODOS PRINCIPALES QUE HAY QUE IMPLEMENTAR
     //conecta al cliente usando la clase ListaClientes
     public void registrarClienteConectado(String usuario, HiloCliente hilo) {
-        if(listaClientes.registrarClienteConectado(usuario, hilo)){
-        log("Usuario conectado: " + usuario);
-        hilo.enviarMensaje("CONEXION_EXITOSA");
-        informarATodos("SERVIDOR: " + usuario + " se ha unido al chat", null);
-        }else{
-            
+        if (listaClientes.registrarClienteConectado(usuario, hilo)) {
+            log("Usuario conectado: " + usuario);
+            hilo.enviarMensaje("CONEXION_EXITOSA");
+            informarATodos("SERVIDOR: " + usuario + " se ha unido al chat", null);
         }
     }
 
@@ -139,9 +136,9 @@ public class Servidor {
     }
 
     public void enviarMensajePublico(String usuario, String mensaje) {
-        String mensajeCompleto = "PUBLICO [" + usuario + "]: " + mensaje;      
+        String mensajeCompleto = "PUBLICO [" + usuario + "]: " + mensaje;
         informarATodos(mensajeCompleto, usuario);
-        ultimoMensaje=mensaje;
+        ultimoMensaje = mensaje;
         log("Mensaje público de " + usuario + ": " + mensaje);
     }
 
@@ -157,6 +154,11 @@ public class Servidor {
             hiloRemitente.enviarMensaje(mensajeConfirmacion);
             ultimoMensaje = "PRIVADO: " + usuarioActual + " a " + destinatario + ": " + mensaje;;
             log("Mensaje privado " + usuarioActual + " a " + destinatario + ": " + mensaje);
+        } else {
+            // Usuario no encontrado - enviar mensaje de error al remitente
+            if (hiloRemitente != null) {
+                hiloRemitente.enviarMensaje("ERROR_PRIVADO: El usuario '" + destinatario + "' no está conectado");
+            }
         }
     }
 
@@ -169,7 +171,10 @@ public class Servidor {
             }
         }
     }
-    
+
+    public ListaClientes getListaClientes() {
+        return listaClientes;
+    }
 
     public static void main(String[] args) {
         Servidor servidor = new Servidor();

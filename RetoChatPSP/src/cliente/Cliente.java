@@ -45,9 +45,6 @@ public class Cliente {
         enviarMensaje("/privado " + destinatario + " " + mensaje);
     }
 
-    public void detenerRecepcion() {
-        detenerRecepcion = true; // ← Para que el hilo receptor se detenga
-    }
 
     public String recibirMensaje() throws IOException, ClassNotFoundException {
         if (conectado && !detenerRecepcion) {
