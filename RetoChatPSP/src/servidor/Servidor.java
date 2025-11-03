@@ -40,12 +40,14 @@ public class Servidor {
     private Date fechaInicio;
     private String ultimoMensaje;
     private ListaClientes listaClientes;
+    private ListaMensajes listaMensajes;
 
     public Servidor() {
         this.logMensajes = new ArrayList<>();
         this.fechaInicio = new Date();
         this.ultimoMensaje = "Ninguno";
         this.listaClientes = new ListaClientes();
+        this.listaMensajes = new ListaMensajes();
     }
 
     public void iniciar() {
@@ -67,6 +69,7 @@ public class Servidor {
                             System.out.println("Hora: " + new SimpleDateFormat("HH:mm:ss").format(new Date()));
                             System.out.println("Usuarios conectados: " + usuariosConectados);
                             System.out.println("Tiempo activo: " + tiempoActivo + " segundos");
+                            System.out.println("Mensajes totales: " + listaMensajes.getTotalMensajes());
                             System.out.println("Último mensaje: " + ultimoMensaje);
                             System.out.println("=================================");
                             Thread.sleep(intervaloEstadisticas);
@@ -138,6 +141,8 @@ public class Servidor {
     public void enviarMensajePublico(String usuario, String mensaje) {
         String mensajeCompleto = "PUBLICO [" + usuario + "]: " + mensaje;
         informarATodos(mensajeCompleto, usuario);
+        
+        listaMensajes.agregarMensajePublico(usuario, mensaje);
         ultimoMensaje = mensaje;
         log("Mensaje público de " + usuario + ": " + mensaje);
     }
@@ -152,6 +157,8 @@ public class Servidor {
 
             hiloDestino.enviarMensaje(mensajePrivado);
             hiloRemitente.enviarMensaje(mensajeConfirmacion);
+            
+            listaMensajes.agregarMensajePrivado(usuarioActual, destinatario, mensaje);
             ultimoMensaje = "PRIVADO: " + usuarioActual + " a " + destinatario + ": " + mensaje;;
             log("Mensaje privado " + usuarioActual + " a " + destinatario + ": " + mensaje);
         } else {
